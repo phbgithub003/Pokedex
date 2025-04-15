@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 type LocationArea struct {
@@ -25,9 +26,57 @@ type Config struct {
 // Create a global config variable
 var pokeapiConfig Config
 
+// Create a global cache with a 5-minute expiration
+var pokeapiCache = NewCache(5 * time.Minute)
+
 // GetConfig returns the global config
 func GetConfig() *Config {
 	return &pokeapiConfig
+}
+
+// fetchFromCacheOrRemote gets data from cache if available or makes a remote request
+func fetchFromCacheOrRemote(url string) ([]byte, error) {
+	// Check if we have this URL cached
+	if cachedData, ok := pokeapiCache.Get(url); ok {
+		fmt.Println("Using cached data")
+		return cachedData, nil
+	}
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the response
+	pokeapiCache.Add(url, body)
+	return body, nil
+}
+
+// processLocationAreaData parses the API response and updates config
+func processLocationAreaData(body []byte) error {
+	var result LocationArea
+	err := json.Unmarshal(body, &result)
+	if err != nil {
+		return err
+	}
+
+	pokeapiConfig.Next = result.Next
+	if result.Previous != nil {
+		pokeapiConfig.Previous = *result.Previous
+	} else {
+		pokeapiConfig.Previous = ""
+	}
+
+	for _, area := range result.Results {
+		fmt.Printf("- %s\n", area.Name)
+	}
+
+	return nil
 }
 
 func getLocationAreas() error {
@@ -35,72 +84,24 @@ func getLocationAreas() error {
 	if pokeapiConfig.Next != "" {
 		url = pokeapiConfig.Next
 	}
-	resp, err := http.Get(url)
+
+	body, err := fetchFromCacheOrRemote(url)
 	if err != nil {
 		return err
 	}
 
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var result LocationArea
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return err
-	}
-
-	pokeapiConfig.Next = result.Next
-	if result.Previous != nil {
-		pokeapiConfig.Previous = *result.Previous
-	} else {
-		pokeapiConfig.Previous = ""
-	}
-
-	for _, area := range result.Results {
-		fmt.Printf("- %s\n", area.Name)
-	}
-
-	return nil
+	return processLocationAreaData(body)
 }
 
 func getPrevLocationArea() error {
 	if pokeapiConfig.Previous == "" {
-		return fmt.Errorf("no previous location area")
+		return fmt.Errorf("you're on the first page")
 	}
 
-	url := pokeapiConfig.Previous
-	resp, err := http.Get(url)
+	body, err := fetchFromCacheOrRemote(pokeapiConfig.Previous)
 	if err != nil {
 		return err
 	}
 
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var result LocationArea
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return err
-	}
-
-	pokeapiConfig.Next = result.Next
-	if result.Previous != nil {
-		pokeapiConfig.Previous = *result.Previous
-	} else {
-		pokeapiConfig.Previous = ""
-	}
-
-	for _, area := range result.Results {
-		fmt.Printf("- %s\n", area.Name)
-	}
-
-	return nil
+	return processLocationAreaData(body)
 }
