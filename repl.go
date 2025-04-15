@@ -29,6 +29,11 @@ func getCommands() map[string]cliCommand {
 			description: "Displays the previous map",
 			callback:    commandMapb,
 		},
+		"explore": {
+			name:        "explore",
+			description: "Explore a specific area",
+			callback:    commandExplore,
+		},
 	}
 }
 
@@ -51,7 +56,17 @@ func startRepl() {
 			continue
 		}
 
-		err := command.callback()
+		var err error
+		if commandName == "explore" {
+			if len(words) != 2 {
+				fmt.Println("Explore command requires an area name")
+				continue
+			}
+			err = command.callback(words[1])
+		} else {
+			err = command.callback()
+		}
+
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -64,13 +79,13 @@ func cleanInput(text string) []string {
 	return words
 }
 
-func commandExit() error {
+func commandExit(...string) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp() error {
+func commandHelp(...string) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	fmt.Println()
@@ -83,18 +98,25 @@ func commandHelp() error {
 	return nil
 }
 
-func commandMap() error {
+func commandMap(...string) error {
 	getLocationAreas()
 	return nil
 }
 
-func commandMapb() error {
+func commandMapb(...string) error {
 	getPrevLocationArea()
 	return nil
+}
+
+func commandExplore(areaName ...string) error {
+	if len(areaName) == 0 {
+		return fmt.Errorf("area name is required")
+	}
+	return getPokemonInArea(areaName[0])
 }
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func() error
+	callback    func(...string) error
 }

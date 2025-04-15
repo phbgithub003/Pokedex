@@ -23,6 +23,15 @@ type Config struct {
 	Previous string
 }
 
+type LocationAreaPokemon struct {
+	PokemonEncounters []struct {
+		Pokemon struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"pokemon"`
+	} `json:"pokemon_encounters"`
+}
+
 // Create a global config variable
 var pokeapiConfig Config
 
@@ -38,7 +47,6 @@ func GetConfig() *Config {
 func fetchFromCacheOrRemote(url string) ([]byte, error) {
 	// Check if we have this URL cached
 	if cachedData, ok := pokeapiCache.Get(url); ok {
-		fmt.Println("Using cached data")
 		return cachedData, nil
 	}
 	resp, err := http.Get(url)
@@ -104,4 +112,26 @@ func getPrevLocationArea() error {
 	}
 
 	return processLocationAreaData(body)
+}
+
+func getPokemonInArea(areaName string) error {
+	fmt.Printf("Exploring %s...\n", areaName)
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%s", areaName)
+
+	body, err := fetchFromCacheOrRemote(url)
+	if err != nil {
+		return err
+	}
+
+	var result LocationAreaPokemon
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Found Pokemon:\n")
+	for _, encounter := range result.PokemonEncounters {
+		fmt.Printf("- %s\n", encounter.Pokemon.Name)
+	}
+	return nil
 }
