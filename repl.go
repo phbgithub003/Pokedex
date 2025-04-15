@@ -34,6 +34,11 @@ func getCommands() map[string]cliCommand {
 			description: "Explore a specific area",
 			callback:    commandExplore,
 		},
+		"catch": {
+			name:        "catch",
+			description: "Catch a pokemon",
+			callback:    commandCatch,
+		},
 	}
 }
 
@@ -60,6 +65,12 @@ func startRepl() {
 		if commandName == "explore" {
 			if len(words) != 2 {
 				fmt.Println("Explore command requires an area name")
+				continue
+			}
+			err = command.callback(words[1])
+		} else if commandName == "catch" {
+			if len(words) != 2 {
+				fmt.Println("Catch command requires a pokemon name")
 				continue
 			}
 			err = command.callback(words[1])
@@ -113,6 +124,13 @@ func commandExplore(areaName ...string) error {
 		return fmt.Errorf("area name is required")
 	}
 	return getPokemonInArea(areaName[0])
+}
+
+func commandCatch(pokemonName ...string) error {
+	if len(pokemonName) == 0 {
+		return fmt.Errorf("pokemon name is required")
+	}
+	return catchPokemon(pokemonName[0])
 }
 
 type cliCommand struct {

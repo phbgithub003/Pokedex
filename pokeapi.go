@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -32,11 +33,43 @@ type LocationAreaPokemon struct {
 	} `json:"pokemon_encounters"`
 }
 
+type PokemonStrength struct {
+	BaseEexperience int `json:base_experience`
+}
+
+// Updated Pokemon struct with additional fields
+type Pokemon struct {
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	BaseExperience int    `json:"base_experience"`
+	Height         int    `json:"height"`
+	Weight         int    `json:"weight"`
+	Stats          []struct {
+		BaseStat int `json:"base_stat"`
+		Stat     struct {
+			Name string `json:"name"`
+		} `json:"stat"`
+	} `json:"stats"`
+	Types []struct {
+		Type struct {
+			Name string `json:"name"`
+		} `json:"type"`
+	} `json:"types"`
+}
+
 // Create a global config variable
 var pokeapiConfig Config
 
 // Create a global cache with a 5-minute expiration
 var pokeapiCache = NewCache(5 * time.Minute)
+
+// Create a map to store caught Pokemon
+var pokedex = make(map[string]Pokemon)
+
+// Add a initialization function for the random number generator
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // GetConfig returns the global config
 func GetConfig() *Config {
@@ -134,4 +167,85 @@ func getPokemonInArea(areaName string) error {
 		fmt.Printf("- %s\n", encounter.Pokemon.Name)
 	}
 	return nil
+}
+
+// Add a function to inspect caught Pokemon
+func inspectPokemon(pokemonName string) error {
+	pokemon, ok := pokedex[pokemonName]
+	if !ok {
+		return fmt.Errorf("you haven't caught %s yet", pokemonName)
+	}
+
+	fmt.Printf("Name: %s\n", pokemon.Name)
+	fmt.Printf("Height: %d\n", pokemon.Height)
+	fmt.Printf("Weight: %d\n", pokemon.Weight)
+
+	fmt.Println("Stats:")
+	for _, stat := range pokemon.Stats {
+		fmt.Printf("  -%s: %d\n", stat.Stat.Name, stat.BaseStat)
+	}
+
+	fmt.Println("Types:")
+	for _, typeInfo := range pokemon.Types {
+		fmt.Printf("  -%s\n", typeInfo.Type.Name)
+	}
+
+	return nil
+}
+
+// Add a function to list all caught Pokemon
+func listCaughtPokemon() error {
+	if len(pokedex) == 0 {
+		fmt.Println("Your Pokedex is empty")
+		return nil
+	}
+
+	fmt.Println("Your Pokedex:")
+	for name := range pokedex {
+		fmt.Printf("  - %s\n", name)
+	}
+
+	return nil
+}
+
+// Update the catchPokemon function to store caught Pokemon
+func catchPokemon(pokemonName string) error {
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s", pokemonName)
+
+	body, err := fetchFromCacheOrRemote(url)
+	if err != nil {
+		return err
+	}
+
+	var pokemon Pokemon
+	err = json.Unmarshal(body, &pokemon)
+	if err != nil {
+		return err
+	}
+
+	// Calculate catch probability based on base_experience
+	// Higher base_experience = harder to catch
+	catchRate := 100 - pokemon.BaseExperience/2
+	if catchRate < 10 {
+		catchRate = 10 // Minimum 10% chance
+	} else if catchRate > 90 {
+		catchRate = 90 // Maximum 90% chance
+	}
+
+	// Generate a random number between 1 and 100
+	randomNum := rand.Intn(100) + 1
+
+	fmt.Printf("Trying to catch with %d%% chance...\n", catchRate)
+
+	// Compare the random number with the catch rate
+	if randomNum <= catchRate {
+		fmt.Printf("Congratulations! You caught %s!\n", pokemon.Name)
+		// Add the Pokemon to the Pokedex
+		pokedex[pokemon.Name] = pokemon
+		return nil
+	} else {
+		fmt.Printf("Oh no! %s escaped!\n", pokemon.Name)
+		return nil
+	}
 }
